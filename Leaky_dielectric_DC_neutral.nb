@@ -1,0 +1,87 @@
+(* Content-type: application/vnd.wolfram.mathematica *)
+
+(*** Wolfram Notebook File ***)
+(* http://www.wolfram.com/nb *)
+
+Notebook[{
+Cell["Two-layer leaky dielectric under a DC field: linear stability and neutral curve D0^2 vs k", "Title"],
+
+Cell["Geometry and notation (same symbols as Leaky_dielectric_DC.nb)\n   fluid 1 :  -h1 < z < 0     bottom wall z = -h1 held at potential 0\n   fluid 2 :    0 < z < h2    top wall z = +h2 held at potential D0\n   interface:  z = zeta Exp[I k x + s t],   gravity g along -z,   interfacial tension gam\n   eps_j, sig_j, mu_j, rho_j = permittivity (relative), conductivity, viscosity, density of fluid j\n\nPlan of the calculation\n   Step 1  base state: potentials, field gradients, interfacial charge q0\n   Step 2  perturbed potentials psih1, psih2   (they contain the unknown W'(0))\n   Step 3  perturbed velocities W1, W2         (they contain the unknown tangential stress tau)\n   Step 4  eliminate W'(0) and tau              (charge convection <-> tangential stress loop)\n   Step 5  normal-stress balance at the interface\n   Step 6  solve the normal-stress balance for D0^2 at given k  -> neutral curve\n   Step 7  fluid properties, check against a classical limit\n   Step 8  plots of D0^2 vs k for several fluid pairs, and for varying conductivity ratio\n\nOnly the neutral state is computed: growth rate s = 0. All perturbation amplitudes are proportional to zeta.", "Text"],
+
+Cell["ClearAll[\"Global`*\"];", "Input"],
+
+Cell["Step 1.  Base state (flat interface, steady DC field)", "Section"],
+
+Cell["In each layer the potential obeys Laplace's equation, so it is linear in z:  psi_j = a_j z + b_j.\nThe four constants follow from four conditions:\n   (i)   psi1(-h1) = 0                      bottom electrode\n   (ii)  psi2(+h2) = D0                     top electrode\n   (iii) psi1(0) = psi2(0)                  potential is continuous at the interface\n   (iv)  sig1 psi1' = sig2 psi2' at z = 0   steady state of the charge equation (2.40):\n                                            dq/dt = sig2 psi2' - sig1 psi1' = 0\nGauss' law then GIVES the base interfacial charge:  q0 = eps0 (eps1 psi1' - eps2 psi2').\n(In the original notebook q was kept as a free symbol; for DC it is fixed by (iv).)", "Text"],
+
+Cell["psi1 = a1 z + b1;  psi2 = a2 z + b2;\nbaseBCs = {\n   (psi1 /. z -> -h1) == 0,\n   (psi2 /. z ->  h2) == D0,\n   (psi1 /. z -> 0) == (psi2 /. z -> 0),\n   sig1 D[psi1, z] == sig2 D[psi2, z]};\nbaseCoef = Solve[baseBCs, {a1, b1, a2, b2}][[1]];\npsi1base = Simplify[psi1 /. baseCoef];\npsi2base = Simplify[psi2 /. baseCoef];\nPrint[\"psi1^0(z) = \", psi1base];\nPrint[\"psi2^0(z) = \", psi2base];", "Input"],
+
+Cell["Base field gradients (constant in each layer), their jump deltaE (it forces the perturbed potential in Step 2) and the base interfacial charge q0. Note q0 = 0 when eps1/eps2 = sig1/sig2.", "Text"],
+
+Cell["dzpsi1b = Simplify[D[psi1base, z]];\ndzpsi2b = Simplify[D[psi2base, z]];\ndeltaE  = Simplify[dzpsi2b - dzpsi1b];\nq0      = Simplify[eps0 (eps1 dzpsi1b - eps2 dzpsi2b)];\nPrint[\"dz psi1^0 = \", dzpsi1b];\nPrint[\"dz psi2^0 = \", dzpsi2b];\nPrint[\"deltaE = dz psi2^0 - dz psi1^0 = \", deltaE];\nPrint[\"q0 = \", q0];", "Input"],
+
+Cell["Step 2.  Perturbed potentials", "Section"],
+
+Cell["Perturbation psi_j = psi_j^0(z) + psih_j(z) Exp[I k x + s t].  Laplace's equation gives\n   psih_j'' - k^2 psih_j = 0   ->   psih_j = C Exp[k z] + C' Exp[-k z].\nFour conditions, linearised about z = 0:\n   (i)   psih1(-h1) = 0\n   (ii)  psih2(+h2) = 0\n   (iii) psih1(0) - psih2(0) = zeta deltaE        continuity of potential on the deformed interface (2.46)\n   (iv)  sig2 psih2'(0) - sig1 psih1'(0) + q0 W'(0) = 0\nCondition (iv) is the perturbed charge conservation equation (2.48),\n   s qh = sig2 psih2'(0) - sig1 psih1'(0) + q0 W'(0),\nat the neutral state s = 0. The term q0 W'(0) is convection of the base charge by the interfacial flow\n(surface divergence of the velocity = -W'(0)).\n\nIMPORTANT difference from the original notebook: there condition (iv) was\n   0 == eps0 eps1 psih1'(0) - eps0 eps2 psih2'(0),\ni.e. zero perturbed charge. That is the perfect-dielectric condition. For a leaky dielectric Gauss' law\nonly defines the perturbed charge qh afterwards; the condition that closes the problem is (iv) above\n(your eq248). It is a boundary condition for psih, not an equation for q.\n\nW'(0) is not known yet, so it is carried as the symbol dW0 and eliminated in Step 4.", "Text"],
+
+Cell["psih1[z_] := C1 Exp[k z] + C2 Exp[-k z];\npsih2[z_] := C3 Exp[k z] + C4 Exp[-k z];\npotBCs = {\n   psih1[-h1] == 0,\n   psih2[ h2] == 0,\n   psih1[0] - psih2[0] == zeta deltaE,\n   sig2 (D[psih2[z], z] /. z -> 0) - sig1 (D[psih1[z], z] /. z -> 0) + q0 dW0 == 0};\npotSol = Solve[potBCs, {C1, C2, C3, C4}][[1]];\npsih1v[z_] = psih1[z] /. potSol;\npsih2v[z_] = psih2[z] /. potSol;", "Input"],
+
+Cell["Check: the four boundary conditions are satisfied (should print {0, 0, 0, 0}).", "Text"],
+
+Cell["Simplify[{psih1v[-h1], psih2v[h2], psih1v[0] - psih2v[0] - zeta deltaE,\n  sig2 (D[psih2v[z], z] /. z -> 0) - sig1 (D[psih1v[z], z] /. z -> 0) + q0 dW0}]", "Input"],
+
+Cell["Step 3.  Perturbed vertical velocities", "Section"],
+
+Cell["Vertical velocity w_j = W_j(z) Exp[I k x + s t]. Eliminating pressure from the momentum equations,\nat s = 0 (inertia drops out) each layer obeys\n   (d^2/dz^2 - k^2)^2 W_j = 0   ->   W_j = (aa + cc z) Exp[k z] + (bb + dd z) Exp[-k z].\nEight conditions:\n   (1,2) W1 = W1' = 0 at z = -h1               no slip, no penetration at the bottom wall\n   (3,4) W2 = W2' = 0 at z = +h2               same at the top wall\n   (5)   W1(0) = W2(0)                         continuity of normal velocity\n   (6)   W1'(0) = W2'(0)                       continuity of tangential velocity (u = I W'/k)\n   (7)   mu2 (W2'' + k^2 W2) - mu1 (W1'' + k^2 W1) = tau     tangential stress balance at z = 0\n   (8)   W1(0) = 0                             kinematic condition s zeta = W(0) with s = 0\nThe electric tangential stress is tau = k^2 q0 (zeta dz psi1^0 + psih1(0)): base charge q0 times the\nperturbed tangential field. It is carried as the symbol tau and eliminated in Step 4.", "Text"],
+
+Cell["W1[z_] := aa1 Exp[k z] + bb1 Exp[-k z] + cc1 z Exp[k z] + dd1 z Exp[-k z];\nW2[z_] := aa2 Exp[k z] + bb2 Exp[-k z] + cc2 z Exp[k z] + dd2 z Exp[-k z];\nvelBCs = {\n   W1[-h1] == 0, (D[W1[z], z] /. z -> -h1) == 0,\n   W2[ h2] == 0, (D[W2[z], z] /. z ->  h2) == 0,\n   W1[0] == W2[0],\n   (D[W1[z], z] /. z -> 0) == (D[W2[z], z] /. z -> 0),\n   mu2 ((D[W2[z], {z, 2}] /. z -> 0) + k^2 W2[0]) -\n     mu1 ((D[W1[z], {z, 2}] /. z -> 0) + k^2 W1[0]) == tau,\n   W1[0] == 0};\nvelSol = Solve[velBCs, {aa1, bb1, cc1, dd1, aa2, bb2, cc2, dd2}][[1]];\nW1v[z_] = W1[z] /. velSol;\nW2v[z_] = W2[z] /. velSol;", "Input"],
+
+Cell["Step 4.  Close the loop: eliminate W'(0) and tau", "Section"],
+
+Cell["Step 2 gave the potentials in terms of dW0 = W'(0); Step 3 gave the velocities in terms of tau.\nThe two definitions\n   dW0 = W1'(0)                                   (from the velocity solution, linear in tau)\n   tau = k^2 q0 (zeta dz psi1^0 + psih1(0))       (from the potential solution, linear in dW0)\nare two linear equations for the two unknowns. Physically: the tangential electric stress drives an\ninterfacial flow, the flow convects the base charge q0, and that changes the perturbed field and hence\nthe stress. After this step everything is proportional to zeta and depends on the voltage only via D0^2.", "Text"],
+
+Cell["closure = Solve[{\n     dW0 == (D[W1v[z], z] /. z -> 0),\n     tau == k^2 q0 (zeta dzpsi1b + psih1v[0])}, {dW0, tau}][[1]];", "Input"],
+
+Cell["Step 5.  Normal-stress balance at the interface", "Section"],
+
+Cell["Linearised normal-stress jump (fluid 2 minus fluid 1) at z = 0:\n   -(p2 - p1) + 2 (mu2 W2' - mu1 W1')        pressure and viscous normal stress\n   + eps0 (eps2 dz psi2^0 psih2' - eps1 dz psi1^0 psih1')     Maxwell normal stress  [eps E_z^0 Eh_z]\n   + (rho2 - rho1) g zeta                    base hydrostatic pressure evaluated on the deformed interface\n   - gam k^2 zeta                            surface tension (curvature)\n   = 0\nThe perturbed pressure follows from the x-momentum equation at s = 0:\n   p_j = mu_j (W_j''' - k^2 W_j') / k^2.\nSo the hydrodynamic part of each layer is  -p + 2 mu W' = -mu (W''' - 3 k^2 W')/k^2.\nSigns: gravity is stabilising when the heavier fluid is below (rho1 > rho2), surface tension is always\nstabilising, the Maxwell stress is the destabilising term.", "Text"],
+
+Cell["pres[W_, mu_] := mu (D[W, {z, 3}] - k^2 D[W, z])/k^2;\nviscN = ((-pres[W2v[z], mu2] + 2 mu2 D[W2v[z], z]) -\n         (-pres[W1v[z], mu1] + 2 mu1 D[W1v[z], z])) /. z -> 0;\nmaxwN = eps0 (eps2 dzpsi2b (D[psih2v[z], z] /. z -> 0) -\n              eps1 dzpsi1b (D[psih1v[z], z] /. z -> 0));\nNS = viscN + maxwN + (rho2 - rho1) g zeta - gam k^2 zeta;", "Input"],
+
+Cell["Substitute the closure of Step 4 and divide by zeta. NSc == 0 is the neutral-stability condition. It is a rational function of D0^2: (c2 D0^4 + c1 D0^2 + c0)/(1 - beta D0^2), i.e. a quadratic in D0^2.", "Text"],
+
+Cell["NSc = (NS /. closure)/zeta;", "Input"],
+
+Cell["Step 6.  Solve the normal-stress balance for D0^2 at a given k", "Section"],
+
+Cell["The fully symbolic root is extremely long, so numbers are put in first and the quadratic is then solved.\nneutralDsqAll[k, parameters] does the following:\n   1. replaces D0 by Sqrt[Dsq], inserts the parameter values (made exact with Rationalize) and a\n      100-digit value of k, so that the large and small exponentials do not cancel badly;\n   2. takes the numerator of NSc and solves numerator == 0 for Dsq;\n   3. keeps the real, positive roots that really make NSc vanish (this last test removes a zero of the\n      denominator in case Together did not cancel it).\nneutralDsq returns the smallest such root = neutral D0^2. The interface is unstable for D0^2 above it.", "Text"],
+
+Cell["neutralDsqAll[kv_?NumericQ, par_] := Module[{expr, num, roots, scale},\n   expr = NSc /. D0 -> Sqrt[Dsq] /. Rationalize[par, 0] /. k -> SetPrecision[kv, 100];\n   scale = Abs[expr /. Dsq -> 0];\n   num = Numerator[Together[expr]];\n   roots = Dsq /. NSolve[num == 0, Dsq, WorkingPrecision -> 30];\n   Sort[Re /@ Select[roots,\n      Abs[Im[#]] <= 10^-12 Abs[#] && Re[#] > 0 && Abs[expr /. Dsq -> #] < 10^-8 scale &]]];\nneutralDsq[kv_?NumericQ, par_] := With[{r = neutralDsqAll[kv, par]},\n   If[r === {}, Missing[\"NoNeutralVoltage\"], N[First[r]]]];", "Input"],
+
+Cell["Step 7.  Fluid pairs (SI units) and a check", "Section"],
+
+Cell["Each entry is bottom fluid (1) / top fluid (2), heavier fluid below. Units: sig in S/m, mu in Pa s,\nrho in kg/m^3, gam in N/m, h in m. These are representative literature values; oil conductivities vary\nstrongly between samples, so replace them with measured values for your own fluids. Gap thicknesses\nh1, h2 are set in 'common'.", "Text"],
+
+Cell["common = {eps0 -> 8.854187817*^-12, g -> 9.81, h1 -> 1.*^-3, h2 -> 1.*^-3};\nfluids = <|\n   \"water / air\" -> {eps1 -> 80., eps2 -> 1., sig1 -> 5.5*^-6, sig2 -> 1.*^-15,\n     mu1 -> 1.0*^-3, mu2 -> 1.8*^-5, rho1 -> 998., rho2 -> 1.2, gam -> 0.072},\n   \"castor oil / air\" -> {eps1 -> 4.5, eps2 -> 1., sig1 -> 4.*^-11, sig2 -> 1.*^-15,\n     mu1 -> 0.69, mu2 -> 1.8*^-5, rho1 -> 961., rho2 -> 1.2, gam -> 0.035},\n   \"silicone oil / air\" -> {eps1 -> 2.8, eps2 -> 1., sig1 -> 1.*^-12, sig2 -> 1.*^-15,\n     mu1 -> 0.97, mu2 -> 1.8*^-5, rho1 -> 970., rho2 -> 1.2, gam -> 0.021},\n   \"water / silicone oil (5 cSt)\" -> {eps1 -> 80., eps2 -> 2.7, sig1 -> 5.5*^-6, sig2 -> 1.*^-12,\n     mu1 -> 1.0*^-3, mu2 -> 4.6*^-3, rho1 -> 998., rho2 -> 913., gam -> 0.040},\n   \"silicone oil / castor oil\" -> {eps1 -> 2.8, eps2 -> 4.5, sig1 -> 1.*^-12, sig2 -> 4.*^-11,\n     mu1 -> 0.97, mu2 -> 0.69, rho1 -> 970., rho2 -> 961., gam -> 0.0045}|>;", "Input"],
+
+Cell["Check against a known result. Water under air is practically a perfect conductor under a perfect\ndielectric, for which\n   D0^2 = (gam k^2 + (rho1 - rho2) g) h2^2 Tanh[k h2] / (eps0 eps2 k).\nBoth numbers printed below should be 1.78309*10^6 V^2 (k = 300 1/m).", "Text"],
+
+Cell["With[{par = Join[common, fluids[\"water / air\"]], kv = 300.},\n  Print[\"this analysis : \", neutralDsq[kv, par]];\n  Print[\"classical     : \",\n   ((gam k^2 + (rho1 - rho2) g) h2^2 Tanh[k h2]/(eps0 eps2 k)) /. par /. k -> kv]];", "Input"],
+
+Cell["Step 8.  Plots of D0^2 versus k", "Section"],
+
+Cell["Neutral curve for every fluid pair on a logarithmic grid of wavenumbers (20 to 2*10^4 1/m). Above a curve the interface is unstable. For these gaps every curve rises with k, so the long-wave limit k -> 0 gives the critical voltage.", "Text"],
+
+Cell["kList = 10.^Range[Log10[20.], Log10[2.*^4], 0.05];\ncurves = Association[KeyValueMap[\n    Function[{name, f}, name -> Select[\n        Table[{kv, neutralDsq[kv, Join[common, f]]}, {kv, kList}], NumericQ[#[[2]]] &]], fluids]];\nfig = ListLogLogPlot[Values[curves], Joined -> True, PlotLegends -> Keys[curves],\n   Frame -> True, FrameLabel -> {\"k  (1/m)\", \"neutral D0^2  (V^2)\"},\n   PlotLabel -> \"DC neutral curves, h1 = h2 = 1 mm (unstable above each curve)\",\n   PlotRange -> All, GridLines -> Automatic, ImageSize -> 600]", "Input"],
+
+Cell["Critical voltage of each pair, estimated at the smallest k of the grid.", "Text"],
+
+Cell["TableForm[KeyValueMap[{#1, Sqrt[#2[[1, 2]]]} &, curves],\n TableHeadings -> {None, {\"pair (bottom / top)\", \"D0 critical (V)\"}}]", "Input"],
+
+Cell["Effect of leakiness: silicone oil / castor oil with the conductivity ratio sig1/sig2 varied. When sig1/sig2 = eps1/eps2 there is no interfacial charge (q0 = 0) and the perfect-dielectric result is recovered, which has the highest threshold.", "Text"],
+
+Cell["ratios = {0.001, 0.025, 0.2, 2.8/4.5, 3., 1000.};\nratioCurves = Table[\n   With[{par = Join[common,\n       fluids[\"silicone oil / castor oil\"] /. (sig1 -> _) -> (sig1 -> S 4.*^-11)]},\n    Select[Table[{kv, neutralDsq[kv, par]}, {kv, kList}], NumericQ[#[[2]]] &]],\n   {S, ratios}];\nfigRatio = ListLogLogPlot[ratioCurves, Joined -> True,\n   PlotLegends -> (\"sig1/sig2 = \" <> ToString[#] & /@ {0.001, 0.025, 0.2, \"eps1/eps2\", 3., 1000.}),\n   Frame -> True, FrameLabel -> {\"k  (1/m)\", \"neutral D0^2  (V^2)\"},\n   PlotLabel -> \"silicone oil / castor oil: effect of conductivity ratio\",\n   PlotRange -> All, GridLines -> Automatic, ImageSize -> 600]", "Input"]
+},
+WindowSize->{1100, 800},
+StyleDefinitions->"Default.nb"
+]
