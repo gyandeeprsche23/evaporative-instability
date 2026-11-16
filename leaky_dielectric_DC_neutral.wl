@@ -13,9 +13,9 @@
       Step 1  base state: potentials, field gradients, interfacial charge q0
       Step 2  perturbed potentials psih1, psih2   (they contain the unknown W'(0))
       Step 3  perturbed velocities W1, W2         (they contain the unknown tangential stress tau)
-      Step 4  eliminate W'(0) and tau              (charge convection <-> tangential stress loop)
+      Step 4  the two equations that tie W'(0) and tau together  (charge convection <-> tangential stress)
       Step 5  normal-stress balance at the interface
-      Step 6  solve the normal-stress balance for D0^2 at given k  -> neutral curve
+      Step 6  insert numbers, solve the Step-4 equations, then solve the normal stress for D0  -> neutral curve
       Step 7  fluid properties, check against a classical limit
       Step 8  plots of D0^2 vs k for several fluid pairs, and for varying conductivity ratio
    
@@ -132,20 +132,22 @@ W1v[z_] = W1[z] /. velSol;
 W2v[z_] = W2[z] /. velSol;
 
 (* ======================================================================
-   Step 4.  Close the loop: eliminate W'(0) and tau
+   Step 4.  The loop between charge convection and tangential stress
    ====================================================================== *)
 
 (* Step 2 gave the potentials in terms of dW0 = W'(0); Step 3 gave the velocities in terms of tau.
    The two definitions
       dW0 = W1'(0)                                   (from the velocity solution, linear in tau)
       tau = k^2 q0 (zeta dz psi1^0 + psih1(0))       (from the potential solution, linear in dW0)
-   are two linear equations for the two unknowns. Physically: the tangential electric stress drives an
-   interfacial flow, the flow convects the base charge q0, and that changes the perturbed field and hence
-   the stress. After this step everything is proportional to zeta and depends on the voltage only via D0^2. *)
+   are two linear equations for the two unknowns dW0 and tau. Physically: the tangential electric stress
+   drives an interfacial flow, the flow convects the base charge q0, and that changes the perturbed field
+   and hence the stress.
+   The fully symbolic solution of this pair is very long, so here the two equations are only written down;
+   they are solved in Step 6 after the numbers have been inserted. *)
 
-closure = Solve[{
-     dW0 == (D[W1v[z], z] /. z -> 0),
-     tau == k^2 q0 (zeta dzpsi1b + psih1v[0])}, {dW0, tau}][[1]];
+dW1at0  = D[W1v[z], z] /. z -> 0;
+tauExpr = k^2 q0 (zeta dzpsi1b + psih1v[0]);
+closureEqs = {dW0 == dW1at0, tau == tauExpr};
 
 (* ======================================================================
    Step 5.  Normal-stress balance at the interface
@@ -170,32 +172,38 @@ maxwN = eps0 (eps2 dzpsi2b (D[psih2v[z], z] /. z -> 0) -
               eps1 dzpsi1b (D[psih1v[z], z] /. z -> 0));
 NS = viscN + maxwN + (rho2 - rho1) g zeta - gam k^2 zeta;
 
-(* Substitute the closure of Step 4 and divide by zeta. NSc == 0 is the neutral-stability condition. It is a rational function of D0^2: (c2 D0^4 + c1 D0^2 + c0)/(1 - beta D0^2), i.e. a quadratic in D0^2. *)
-
-NSc = (NS /. closure)/zeta;
+(* NS == 0 is the neutral-stability condition. At this point NS is linear in zeta, dW0 and tau; once dW0 and tau are eliminated (Step 6) it depends on the voltage only through D0^2 and has the form (c2 D0^4 + c1 D0^2 + c0)/(1 - beta D0^2), i.e. it is a quadratic in D0^2. *)
 
 (* ======================================================================
-   Step 6.  Solve the normal-stress balance for D0^2 at a given k
+   Step 6.  Insert numbers and solve the normal-stress balance for D0
    ====================================================================== *)
 
-(* The fully symbolic root is extremely long, so numbers are put in first and the quadratic is then solved.
-   neutralDsqAll[k, parameters] does the following:
-      1. replaces D0 by Sqrt[Dsq], inserts the parameter values (made exact with Rationalize) and a
-         100-digit value of k, so that the large and small exponentials do not cancel badly;
-      2. takes the numerator of NSc and solves numerator == 0 for Dsq;
-      3. keeps the real, positive roots that really make NSc vanish (this last test removes a zero of the
+(* neutralD0All[k, parameters] returns the neutral voltages D0 at wavenumber k. It does the following:
+      1. builds the list of numerical values: the parameters are made exact (Rationalize), k is given
+         prec = 60 + 2 k (h1 + h2) digits so that the large and small exponentials Exp[k h], Exp[-k h]
+         do not cancel badly (the number of digits lost grows like k (h1 + h2)),
+         and zeta = 1 (every perturbation is proportional to zeta, so its size is arbitrary);
+      2. solves the two Step-4 equations for dW0 and tau (their coefficients are now numbers, D0 is kept);
+      3. substitutes into the normal stress NS, which becomes a rational function of D0 only;
+      4. takes its numerator and solves numerator == 0 for D0;
+      5. keeps the real, positive roots that really make NS vanish (the last test removes a zero of the
          denominator in case Together did not cancel it).
-   neutralDsq returns the smallest such root = neutral D0^2. The interface is unstable for D0^2 above it. *)
+   neutralDsq returns the square of the smallest such root = neutral D0^2. The interface is unstable for
+   D0^2 above it. *)
 
-neutralDsqAll[kv_?NumericQ, par_] := Module[{expr, num, roots, scale},
-   expr = NSc /. D0 -> Sqrt[Dsq] /. Rationalize[par, 0] /. k -> SetPrecision[kv, 100];
-   scale = Abs[expr /. Dsq -> 0];
+neutralD0All[kv_?NumericQ, par_] := Module[{prec, rules, cl, expr, num, roots, scale},
+   prec = 60 + Ceiling[2 kv (h1 + h2) /. par];
+   rules = Join[par /. x_Real :> Rationalize[x, 0],
+     {k -> N[Rationalize[kv, 0], prec], zeta -> 1}];
+   cl = Solve[closureEqs /. rules, {dW0, tau}][[1]];
+   expr = NS /. rules /. cl;
+   scale = Abs[expr /. D0 -> 0];
    num = Numerator[Together[expr]];
-   roots = Dsq /. NSolve[num == 0, Dsq, WorkingPrecision -> 30];
+   roots = D0 /. Solve[num == 0, D0];
    Sort[Re /@ Select[roots,
-      Abs[Im[#]] <= 10^-12 Abs[#] && Re[#] > 0 && Abs[expr /. Dsq -> #] < 10^-8 scale &]]];
-neutralDsq[kv_?NumericQ, par_] := With[{r = neutralDsqAll[kv, par]},
-   If[r === {}, Missing["NoNeutralVoltage"], N[First[r]]]];
+      Abs[Im[#]] <= 10^-12 Abs[#] && Re[#] > 0 && Abs[expr /. D0 -> #] < 10^-8 scale &]]];
+neutralDsq[kv_?NumericQ, par_] := With[{r = neutralD0All[kv, par]},
+   If[r === {}, Missing["NoNeutralVoltage"], N[First[r]^2]]];
 
 (* ======================================================================
    Step 7.  Fluid pairs (SI units) and a check
@@ -233,32 +241,33 @@ With[{par = Join[common, fluids["water / air"]], kv = 300.},
    Step 8.  Plots of D0^2 versus k
    ====================================================================== *)
 
-(* Neutral curve for every fluid pair on a logarithmic grid of wavenumbers (20 to 2*10^4 1/m). Above a curve the interface is unstable. For these gaps every curve rises with k, so the long-wave limit k -> 0 gives the critical voltage. *)
+(* Neutral curve for every fluid pair on a logarithmic grid of wavenumbers (20 to 2*10^4 1/m). Above a curve the interface is unstable. For these gaps every curve rises with k, so the long-wave limit k -> 0 gives the critical voltage. (This cell does a few hundred evaluations; it can take a minute or two.) *)
 
-kList = 10.^Range[Log10[20.], Log10[2.*^4], 0.05];
-curves = Association[KeyValueMap[
-    Function[{name, f}, name -> Select[
-        Table[{kv, neutralDsq[kv, Join[common, f]]}, {kv, kList}], NumericQ[#[[2]]] &]], fluids]];
-fig = ListLogLogPlot[Values[curves], Joined -> True, PlotLegends -> Keys[curves],
+kList = 10.^Range[Log10[20.], Log10[2.*^4], 0.1];
+pairNames = Keys[fluids];
+curves = Table[
+   Select[Table[{kv, neutralDsq[kv, Join[common, fluids[name]]]}, {kv, kList}],
+    NumericQ[#[[2]]] &], {name, pairNames}];
+fig = ListLogLogPlot[curves, Joined -> True, PlotLegends -> pairNames,
    Frame -> True, FrameLabel -> {"k  (1/m)", "neutral D0^2  (V^2)"},
    PlotLabel -> "DC neutral curves, h1 = h2 = 1 mm (unstable above each curve)",
    PlotRange -> All, GridLines -> Automatic, ImageSize -> 600]
 
 (* Critical voltage of each pair, estimated at the smallest k of the grid. *)
 
-TableForm[KeyValueMap[{#1, Sqrt[#2[[1, 2]]]} &, curves],
+TableForm[Table[{pairNames[[i]], Sqrt[curves[[i, 1, 2]]]}, {i, Length[pairNames]}],
  TableHeadings -> {None, {"pair (bottom / top)", "D0 critical (V)"}}]
 
 (* Effect of leakiness: silicone oil / castor oil with the conductivity ratio sig1/sig2 varied. When sig1/sig2 = eps1/eps2 there is no interfacial charge (q0 = 0) and the perfect-dielectric result is recovered, which has the highest threshold. *)
 
 ratios = {0.001, 0.025, 0.2, 2.8/4.5, 3., 1000.};
 ratioCurves = Table[
-   With[{par = Join[common,
-       fluids["silicone oil / castor oil"] /. (sig1 -> _) -> (sig1 -> S 4.*^-11)]},
-    Select[Table[{kv, neutralDsq[kv, par]}, {kv, kList}], NumericQ[#[[2]]] &]],
-   {S, ratios}];
+   Select[Table[{kv, neutralDsq[kv, Join[common,
+        fluids["silicone oil / castor oil"] /. (sig1 -> _) -> (sig1 -> sRatio 4.*^-11)]]}, {kv, kList}],
+    NumericQ[#[[2]]] &], {sRatio, ratios}];
 figRatio = ListLogLogPlot[ratioCurves, Joined -> True,
-   PlotLegends -> ("sig1/sig2 = " <> ToString[#] & /@ {0.001, 0.025, 0.2, "eps1/eps2", 3., 1000.}),
+   PlotLegends -> {"sig1/sig2 = 0.001", "sig1/sig2 = 0.025", "sig1/sig2 = 0.2",
+     "sig1/sig2 = eps1/eps2 (no charge)", "sig1/sig2 = 3", "sig1/sig2 = 1000"},
    Frame -> True, FrameLabel -> {"k  (1/m)", "neutral D0^2  (V^2)"},
    PlotLabel -> "silicone oil / castor oil: effect of conductivity ratio",
    PlotRange -> All, GridLines -> Automatic, ImageSize -> 600]
